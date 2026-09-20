@@ -44,13 +44,13 @@ Next you'll add population data. You can get current census tract population est
 
 ![data.census.gov homepage](Images/census_gov_homepage.png)
 
-Choose tract as the geography level, then New York, and all the tracts for the five counties that comprise NYC (Bronx, Kings, New York, Queens, Richmond):
+Choose "explore filters," select "Census Tract" as the geography level, then New York, and all the tracts for the five counties that comprise NYC (Bronx, Kings, New York, Queens, Richmond):
 
 ![Choosing tract geography for the NYC counties](Images/census_choose_tract_counties.png)
 
-Choose the year 2023:
+Choose the year 2024 (the most recent 5-year ACS release as of this writing):
 
-![Choose year 2023](Images/census_choose_year_2023.png)
+![Choose year 2024](Images/census_choose_year_2024.png)
 
 Choose the "Populations and People" topic, then "Counts, Estimates, and Projections":
 
@@ -82,11 +82,11 @@ Copy that column and paste the values only (to remove the formula), then delete 
 
 ![Final FIPS/Population sheet before saving](Images/csv_fips_renamed_fields.png)
 
-Save this as a CSV named `Population2023`.
+Save this as a CSV named `Population2024`.
 
 ## Join the population data in QGIS
 
-Now add this data to QGIS. CSV files may not add properly from the Browser panel, so instead use the Data Source Manager and choose the "Delimited Text" option. Specify that the table is a CSV and choose "No Geometry." The dialog will preview the data at the bottom:
+Now add this data to QGIS. CSV files may not add properly from the Browser panel, so instead use the Data Source Manager ![Data Source Manager Button](Images/datasourceManagerButton.png)and choose the "Delimited Text" option. Specify that the table is a CSV and choose "No Geometry." The dialog will preview the data at the bottom:
 
 ![Delimited Text import dialog](Images/csv_import_delimited_text_dialog.png)
 
