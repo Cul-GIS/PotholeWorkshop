@@ -14,7 +14,7 @@ And here is the "Morningside Heights" NTA, composed of 8 of the census tracts ab
 
 ![Morningside Heights NTA](Images/morningside_heights_nta.png)
 
-You will use QGIS to build NTA geographic definitions, population totals, and snow complaint rates for the entire city.
+You will use QGIS to build NTA geographic definitions, population totals, and pothole complaint rates for the entire city.
 
 ## Get the tract geography
 
@@ -86,7 +86,7 @@ Save this as a CSV named `Population2024`.
 
 ## Join the population data in QGIS
 
-Now add this data to QGIS. CSV files may not add properly from the Browser panel, so instead use the Data Source Manager ![Data Source Manager Button](Images/datasourceManagerButton.png)and choose the "Delimited Text" option. Specify that the table is a CSV and choose "No Geometry." The dialog will preview the data at the bottom:
+Now add this data to QGIS. CSV files may not add properly from the Browser panel, so instead use the Data Source Manager ![Data Source Manager Button](Images/datasourceManagerButton.png) and choose the "Delimited Text" option. Specify that the table is a CSV and choose "No Geometry." The dialog will preview the data at the bottom:
 
 ![Delimited Text import dialog](Images/csv_import_delimited_text_dialog.png)
 
@@ -136,7 +136,7 @@ Search "dissolve" in the Processing panel — among the results, choose "Aggrega
 
 ![Searching for Aggregate in the Processing panel](Images/aggregate_tool_search.png)
 
-The Aggregate tool lets you perform arithmetic on variables as tracts are merged — important, since we want to sum the population field. In the Aggregate dialog, choose NTA2020 as the group field. For the NTA2020 and NTAName fields choose "first"; for the Population field choose "sum." You don't need the other fields and may delete them with the delete-field button. Save the output as a Geopackage named `NTAPopulation`:
+The Aggregate tool lets you perform arithmetic on variables as tracts are merged — important, since we want to sum the population field. In the Aggregate dialog, choose NTA2020 as the group field. For the NTA2020 and NTAName fields choose "first_value"; for the Population field choose "sum." You don't need the other fields and may delete them with the delete-field button. Save the output as a Geopackage named `NTAPopulation`:
 
 ![Aggregate dialog settings](Images/aggregate_dialog_settings.png)
 
@@ -148,7 +148,7 @@ And the attribute table will have the population total:
 
 ![NTA attribute table with population](Images/nta_attribute_table_population.png)
 
-## Get the snow complaint data
+## Get the pothole complaint data
 
 The next step is to retrieve the pothole complaint data. We'll use complaints logged to the city's 311 program, available at the [NYC Open Data Portal](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9/about_data).
 
@@ -158,11 +158,18 @@ Since there are over 40 million calls in the full dataset, it's too unwieldy to 
 
 ![Query Data action](Images/query_data_button.png)
 
-Apply filters: .... Then hit Apply:
+Apply filters:
 
-![Date and "snow" complaint filters](Images/filter_date_and_snow_complaints.png)
+- "Problem (formerly Complaint Type)" contains "street condition"
+- AND "Problem Detail (formerly Descriptor)" contains "pothole"
+- AND "Created Date" is between "2026 Jan 01 12:00:00 AM" AND "2026 Sep 01 12:00:00 AM"
+- AND "Latitude" is not null
 
-This should bring the results down to around 30,000 incidents. Download in CSV format.
+Then hit Apply:
+
+![Date and pothole complaint filters](Images/filter_date_and_pothole_complaints.png)
+
+This should bring the results down to around 27,000 incidents. Download in CSV format.
 
 The CSV includes coordinates for each incident, so you can map the table directly in QGIS. Open the Data Source Manager, click "Delimited Text," load the table you just downloaded, choose CSV as the file format, choose "Point coordinates" as the geometry definition, enter "longitude" and "latitude" as the X and Y fields, and make sure "EPSG:4326 – WGS 84" is selected as the geometry CRS (the default reference system for NYC Open Data):
 
@@ -170,7 +177,7 @@ The CSV includes coordinates for each incident, so you can map the table directl
 
 Click Add and close the dialog. The points should map onto the NTAs:
 
-![Snow complaint points mapped on NTAs](Images/snow_points_mapped_on_ntas.png)
+![Pothole complaint points mapped on NTAs](Images/pothole_points_mapped_on_ntas.png)
 
 ## Turn the points into a layer and count them per NTA
 
@@ -178,9 +185,9 @@ Right now these points are just a visual expression of the table's locations. To
 
 ![Export layer menu](Images/export_layer_menu.png)
 
-Export in Geopackage format to your working directory, naming the file `SnowLocations`. It's recommended you also change the CRS to "EPSG:2263 – NAD83 / New York Long Island" to match the projection of the tract file:
+Export in Geopackage format to your working directory, naming the file `PotholeLocations`. It's recommended you also change the CRS to "EPSG:2263 – NAD83 / New York Long Island" to match the projection of the tract file:
 
-![Exporting SnowLocations geopackage](Images/export_snowlocations_geopackage.png)
+![Exporting PotholeLocations geopackage](Images/export_potholelocations_geopackage.png)
 
 The new layer should look identical to the CSV expression — you can now remove the CSV from the project if you like.
 
@@ -188,11 +195,9 @@ Next, calculate the number of complaints per NTA. This requires a kind of spatia
 
 ![Count Points in Polygon menu](Images/count_points_in_polygon_menu.png)
 
-Choose the NTA layer as the polygons and SnowLocations as the points. Name the count field "SnowComplaints." Save the output as `NTA_SnowTotals`:
+Choose the NTA layer as the polygons and PotholeLocations as the points. Name the count field "PotholeComplaints." Save the output as `NTA_PotholeTotals`:
 
 ![Count Points in Polygon dialog](Images/count_points_in_polygon_dialog.png)
-
-> The two screenshots above are carried over from an earlier "fireworks complaints" version of this exercise and still show `Fireworks` / `NTA_FWTotals` in the field name and layer panel — the dialog layout and workflow are otherwise identical. Use `SnowComplaints` and `NTA_SnowTotals` as described in the text above.
 
 Click Run:
 
@@ -200,27 +205,27 @@ Click Run:
 
 The attribute table for this layer will show the total number of complaints for each NTA:
 
-![NTA_SnowTotals attribute table](Images/nta_snowtotals_attribute_table.png)
+![NTA_PotholeTotals attribute table](Images/nta_potholetotals_attribute_table.png)
 
 ## Calculate the complaint rate and map it
 
-Use the "Population" and "SnowComplaints" fields to calculate the rate of complaints per population. From the attribute table, open the Field Calculator. Choose "Create a new field," name the output field "SnowRate," make the output field type "Decimal number," and enter the expression:
+Use the "Population" and "PotholeComplaints" fields to calculate the rate of complaints per population. From the attribute table, open the Field Calculator ![Field Calculator Button](Images/field_calc.png). Choose "Create a new field," name the output field "PotholeRate," make the output field type "Decimal number," and enter the expression:
 
 ```
-( "SnowComplaints" / "Population" ) * 1000
+( "PotholeComplaints" / "Population" ) * 1000
 ```
 
-![Field Calculator building the SnowRate field](Images/field_calculator_snowrate.png)
+![Field Calculator building the PotholeRate field](Images/field_calculator_potholerate.png)
 
-You can optionally click fields directly from "Fields and Values" in the center panel to make sure they're spelled precisely. Click OK — the new column gives the number of snow-related complaints per 1,000 residents:
+You can optionally click fields directly from "Fields and Values" in the center panel to make sure they're spelled precisely. Click OK — the new column gives the number of pothole-related complaints per 1,000 residents:
 
-![Attribute table with SnowRate result](Images/attribute_table_snowrate_result.png)
+![Attribute table with PotholeRate result](Images/attribute_table_potholerate_result.png)
 
-Running the Field Calculator automatically starts an editing session for the layer. End it now by toggling the Edit button.
+Running the Field Calculator automatically starts an editing session for the layer. End it now by toggling the Edit button ![Edit Button](Images/edit_button.png).
 
-Now build a choropleth map of the reporting rates. Remove any layers from the map except the final `NTA_SnowTotals` layer. Open its layer properties, go to Symbology, choose a "Graduated" color scheme, and select SnowRate as the value:
+Now build a choropleth map of the reporting rates. Remove any layers from the map except the final `NTA_PotholeTotals` layer. Open its layer properties, go to Symbology, choose a "Graduated" color scheme, and select PotholeRate as the value:
 
-![Graduated symbology using SnowRate](Images/symbology_graduated_snowrate.png)
+![Graduated symbology using PotholeRate](Images/symbology_graduated_potholerate.png)
 
 Choose a color ramp and a classification scheme, then click Classify:
 
@@ -228,7 +233,7 @@ Choose a color ramp and a classification scheme, then click Classify:
 
 Click OK and inspect the results:
 
-![Final choropleth map of snow complaint rates](Images/final_choropleth_map.png)
+![Final choropleth map of pothole complaint rates](Images/final_choropleth_map.png)
 
 ## Data and companion files
 
