@@ -1,10 +1,14 @@
 # =====================================================================
 # NYC Pothole Complaints by NTA — the R path
 #
-# Companion to PotholeWorkshop.md. This is not a step-for-step
-# translation of the QGIS walkthrough: in several places QGIS needs a
-# dialog and R needs a single function, and those are called out in the
-# comments. The five operations are the same in both:
+# Companion to PotholeWorkshop.md, parallel to PotholeWorkshop.py.
+# Sections are numbered to match the Python script, and the comment at
+# the head of each section quotes the QGIS step it replaces so the two
+# can be read side by side.
+#
+# This is not a step-for-step translation of the QGIS walkthrough: in
+# several places QGIS needs a dialog and R needs a single function, and
+# those are called out below. The five operations are the same in both:
 #
 #   1. join a table to polygons
 #   2. dissolve polygons and sum an attribute
@@ -13,13 +17,15 @@
 #   5. derive a rate and classify it
 #
 # Field and layer names match the QGIS version (PotholeComplaints,
-# PotholeRate, NTA_PotholeTotals) so the two outputs can be compared
+# PotholeRate, NTA_PotholeTotals) so the outputs can be compared
 # directly. The cat() checkpoints should match the counts you see in
 # the QGIS layer panel.
 # =====================================================================
 
 
 # ---- 0. Packages ----------------------------------------------------
+# Run this line once, then leave it commented out.
+#
 # install.packages(c("sf", "dplyr", "readr", "stringr", "ggplot2", "classInt"))
 
 library(sf)        # everything spatial
@@ -29,57 +35,91 @@ library(stringr)   # str_sub, str_detect
 library(ggplot2)   # the map
 library(classInt)  # natural breaks
 
+
 # ---- 1. Config ------------------------------------------------------
 # CHANGE THESE to match your files. Everything below should run
-# unmodified. A wrong field name surfaces at the join, not here, so run
-# names() on each layer after reading it.
+# unmodified. A wrong field name surfaces at the join, not here, so the
+# script prints names() on each layer as it reads it.
+#
+# The md's "create a directory to store all the files for this
+# exercise" is `wd` below. Paths are absolute on purpose, so the script
+# behaves the same from RStudio, from Rscript, or from any working
+# directory; point `wd` at your own copy of the repo.
 
-tract_path <- "data/cul_nyc_tracts_2020.gpkg"
-pot_path   <- "data/Pothole_311_complaints_2026.csv"
+wd <- "C:/Users/ericg/Documents/GitHub/PotholeWorkshop"
+
+# --- inputs. These are file paths, not data; they are read in
+# --- sections 2, 3 and 5.
+
+# The tract geopackage from Geodata@Columbia. It contains a single
+# layer, named "2020", so st_read() finds it without being told which.
+tract_path <- file.path(wd, "data", "cul_nyc_tracts_2020.gpkg")
+
+# The 311 export. The copy in data/ has already had the four portal
+# filters from the md applied (street condition / pothole / Jan-Aug
+# 2026 / latitude not null), so it is 27,158 rows rather than 40M.
+pot_path   <- file.path(wd, "data", "Pothole_311_complaints_2026.csv")
 
 # Population: either the raw data.census.gov download, or the cleaned
-# CSV the workshop has you build. Set ONE of these; leave the other NULL.
-acs_raw    <- NULL                                  # or "data/ACSDT5Y2024.B01003-Data.csv"
-pop_clean  <- "data/Population2024.csv"             # the cleaned CSV, ships with this repo
+# CSV the md has you build by hand. Set ONE of these; leave the other
+# NULL.
+acs_raw    <- NULL                                          # or file.path(wd, "data", "ACSDT5Y2024.B01003-Data.csv")
+pop_clean  <- file.path(wd, "data", "Population2024.csv")   # the cleaned CSV, ships with this repo
 
-out_gpkg   <- "outputs/NTA_PotholeTotals.gpkg"
-out_png    <- "outputs/NTA_PotholeTotals.png"
+# --- outputs
+out_dir    <- file.path(wd, "outputs")
+out_gpkg   <- file.path(out_dir, "NTA_PotholeTotals.gpkg")
+out_png    <- file.path(out_dir, "NTA_PotholeTotals.png")
 
-crs_ft     <- 2263   # NAD83 / New York Long Island (ftUS) — as in QGIS
-crs_ll     <- 4326   # what the 311 lat/lon columns are in
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-# Tract layer fields:
-f_geoid    <- "GEOID"      # 11-character tract identifier
-f_nta      <- "NTA2020"    # NTA code
-f_ntaname  <- "NTAName"    # NTA name
+crs_ft     <- 2263   # NAD83 / New York Long Island (ftUS) — the md's export CRS
+crs_ll     <- 4326   # "EPSG:4326 – WGS 84", what the 311 lat/lon columns are in
 
-# 311 export columns. The portal relabelled these in Dec 2025 and a CSV
-# downloaded through the UI may carry either set of headers. Run
-# names(read_csv(pot_path, n_max = 1)) and set accordingly.
-f_problem  <- "Complaint Type"   # newer exports: "Problem"
-f_detail   <- "Descriptor"       # newer exports: "Problem Detail"
+# Tract layer fields. These are the three the md singles out in the
+# attribute table: "GEOID, NTA2020, and NTAName".
+f_geoid    <- "GEOID"      # 11-digit FIPS, unique per tract
+f_nta      <- "NTA2020"    # NTA code, shared by every tract in an NTA
+f_ntaname  <- "NTAName"    # vernacular NTA name
+
+# 311 export columns. The portal relabelled these, and a CSV downloaded
+# through the UI may carry either set of headers — the names the md
+# uses in its filter list are the ones in the shipped file. Section 5
+# prints names(raw); set these to match what you actually downloaded.
+f_problem  <- "Problem (formerly Complaint Type)"     # older exports: "Complaint Type"
+f_detail   <- "Problem Detail (formerly Descriptor)"  # older exports: "Descriptor"
+f_lat      <- "Latitude"
+f_lon      <- "Longitude"
 
 
 # ---- 2. Tract polygons ----------------------------------------------
-# QGIS: drag the .gpkg in, then Layer Properties to check the CRS.
-# Transform immediately so every later operation happens in feet.
+# md, "Get the tract geography": drag the .gpkg out of the Browser
+# panel into the map window, then right-click the layer and choose
+# "Open Attribute Table" to inspect the fields.
+#
+# The file is already in EPSG:2263, but transform anyway, so the script
+# still works if you swap in a layer that isn't and so that every later
+# operation happens in feet.
 
 tracts <- st_read(tract_path, quiet = TRUE) |>
   st_transform(crs_ft)
 
-names(tracts)                       # <- check against section 1
+print(names(tracts))                # <- check against section 1
 cat("tracts read:", nrow(tracts), "\n")
 
 
 # ---- 3. Population table --------------------------------------------
-# QGIS: open the ACS csv in a spreadsheet, delete the label row, keep
-# two columns, use =RIGHT(A2,11) to trim GEO_ID, paste-special as
-# values, rename, save as Population2024.csv.
+# md, "Clean up the population table": open the ACS csv in a
+# spreadsheet, delete the second row, delete every data column except
+# the first, use =RIGHT(A2,11) to trim the "1400000US" prefix off
+# GEO_ID, paste-special as values, rename the two remaining fields
+# "FIPS" and "Population", save as Population2024.csv.
 #
 # That whole sequence is the four lines below. data.census.gov exports
 # two header rows: read_csv takes the first as column names, so the
 # human-readable labels arrive as data row 1 and slice(-1) drops them.
-# That is the "delete the second row" step.
+# That is the "delete the second row" step. str_sub(GEO_ID, -11) is
+# =RIGHT(A2,11).
 
 if (!is.null(acs_raw)) {
   pop <- read_csv(acs_raw, show_col_types = FALSE) |>
@@ -89,7 +129,11 @@ if (!is.null(acs_raw)) {
       Population = as.numeric(B01003_001E)     # character until we say otherwise
     )
 } else {
-  # The pre-cleaned CSV from the data folder, for anyone who skipped ahead.
+  # The pre-cleaned CSV from the data folder, for anyone who skipped
+  # ahead. col_character() on FIPS is the md's "Change the FIPS field
+  # type to Text (string)" step, and for the same reason: read as a
+  # number, the code is no longer the same kind of thing as the GEOID
+  # in the geopackage and the join below matches nothing.
   pop <- read_csv(pop_clean, col_types = cols(FIPS = col_character())) |>
     mutate(Population = as.numeric(Population))
 }
@@ -111,14 +155,21 @@ cat("population rows:", nrow(pop), "\n")
 
 
 # ---- 4. Join, then dissolve to NTA ----------------------------------
-# QGIS: Properties > Joins to attach the table, export to make it
-# permanent, then Processing > Aggregate grouping on NTA2020, with
-# first_value on the name fields and sum on Population.
+# md, "Join the population data in QGIS": Layer Properties > Joins, add
+# a join on FIPS/GEOID with the "Custom field name prefix" left blank,
+# then Export > Save Features As to a geopackage named
+# TractsWithPopulation, because "the table join is stored in memory."
 #
-# In sf, summarise() unions the geometries for you, so the dissolve is
-# implicit in the group_by. That is the biggest structural difference
-# between the two paths, and the reason there's no intermediate
-# TractsWithPopulation layer here.
+# md, "Build the NTA boundaries": Processing Toolbox > Aggregate, group
+# by NTA2020, first_value on NTA2020 and NTAName, sum on Population,
+# delete the fields you do not need, save as NTAPopulation.
+#
+# left_join() is the table join, and it is permanent the moment it
+# runs, so there is no TractsWithPopulation step here. In sf,
+# summarise() unions the geometries of each group for you, so the
+# dissolve is implicit in the group_by — the biggest structural
+# difference between the two paths. Naming only NTA2020, NTAName and
+# Population is the "delete the other fields" step.
 
 tracts_pop <- tracts |>
   left_join(pop, by = setNames("FIPS", f_geoid))
@@ -136,39 +187,50 @@ cat("NTAs after dissolve:", nrow(ntas), "\n")
 
 
 # ---- 5. Complaints as points ----------------------------------------
-# QGIS: Data Source Manager > Delimited Text, X = longitude,
-# Y = latitude, CRS = EPSG:4326, then Export > Save As in EPSG:2263.
+# md, "Get the pothole complaint data" and "Turn the points into a
+# layer": Data Source Manager > Delimited Text with "Point
+# coordinates", X = longitude, Y = latitude, geometry CRS
+# "EPSG:4326 – WGS 84"; then Export > Save Features As to a geopackage
+# named PotholeLocations, reprojected to EPSG:2263.
 #
-# The filter below reproduces the four portal filters. Note that the
+# st_as_sf() is the first dialog and st_transform() is the second. R
+# holds the result in memory, so PotholeLocations is never written to
+# disk. The md writes it because, in its words, the QGIS
+# delimited-text layer is "just a visual expression of the table's
+# locations" until you export it.
+#
+# The filter reproduces the portal filters from the md. Note that the
 # portal uses CONTAINS, not equals, so str_detect is the faithful
 # translation — == would silently give you a different population of
-# records and a checkpoint that doesn't match.
-#
-# If you downloaded the pre-filtered CSV from the data folder, comment
-# the three filter lines out.
+# records and a checkpoint that does not match. On the shipped CSV,
+# which is already filtered, these lines are redundant but harmless;
+# they matter if you did the download yourself.
 
 raw <- read_csv(pot_path, show_col_types = FALSE)
-names(raw)                          # <- check f_problem / f_detail
+print(names(raw))                   # <- check f_problem / f_detail
 
 potholes <- raw |>
   filter(
     str_detect(str_to_lower(.data[[f_problem]]), "street condition"),
     str_detect(str_to_lower(.data[[f_detail]]),  "pothole"),
-    !is.na(Latitude), !is.na(Longitude)
+    !is.na(.data[[f_lat]]), !is.na(.data[[f_lon]])
   ) |>
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = crs_ll) |>
+  st_as_sf(coords = c(f_lon, f_lat), crs = crs_ll) |>
   st_transform(crs_ft)
 
-# Worth reporting out loud, because the portal filter hides it: roughly
-# half of all pothole complaints carry no coordinates and never reach
-# the map at all.
+# The md's filters bring the portal "down to around 27,000 incidents."
+# Worth saying out loud, because the portal filter hides it: the
+# "Latitude is not null" condition is doing real work — roughly half of
+# all pothole complaints carry no coordinates and never reach the map.
 cat("rows in export:", nrow(raw),
     " | mapped:", nrow(potholes), "\n")        # expect 27,158
 
 
 # ---- 6. Count points in polygon -------------------------------------
-# QGIS: Vector > Analysis Tools > Count Points in Polygon, writing a
-# PotholeComplaints field to a new layer.
+# md, "Turn the points into a layer and count them per NTA":
+# Vector > Analysis Tools > Count Points in Polygon, with the NTA layer
+# as the polygons and PotholeLocations as the points, the count field
+# named PotholeComplaints, output saved as NTA_PotholeTotals.
 #
 # st_intersects() returns, for each NTA, the indices of the points
 # inside it; lengths() turns those lists into counts. One line, no new
@@ -176,22 +238,41 @@ cat("rows in export:", nrow(raw),
 
 ntas$PotholeComplaints <- lengths(st_intersects(ntas, potholes))
 
-# The checkpoint that matters: points falling outside every NTA, i.e.
-# geocodes landing in water or just past the shoreline. A handful is
-# normal. Hundreds means a CRS problem.
-cat("complaints inside an NTA:", sum(ntas$PotholeComplaints),
-    " | dropped:", nrow(potholes) - sum(ntas$PotholeComplaints), "\n")
+# Two checkpoints, and the second is the interesting one.
+#
+# dropped: points that fell outside every NTA — geocodes landing in
+# water or just past the shoreline. A handful is normal; hundreds means
+# a CRS problem.
+#
+# double-counted: points that intersect MORE than one NTA. That happens
+# when a point sits exactly on a shared boundary, and NTA boundaries in
+# NYC mostly follow street centerlines — which is precisely where
+# pothole complaints get geocoded. If this is nonzero, the same
+# complaint is being counted in two neighborhoods, and Count Points in
+# Polygon is doing it too.
+hits    <- st_intersects(potholes, ntas)
+matched <- sum(lengths(hits) > 0)
+cat("complaints inside an NTA:", matched,
+    " | dropped:", nrow(potholes) - matched,
+    " | double-counted:", sum(lengths(hits)) - matched, "\n")
 
 
 # ---- 7. Rate --------------------------------------------------------
-# QGIS: Field Calculator, new decimal field PotholeRate, expression
-# ( "PotholeComplaints" / "Population" ) * 1000
+# md, "Calculate the complaint rate and map it": Field Calculator,
+# "Create a new field", name PotholeRate, output type "Decimal number",
+# expression
+#
+#   ( "PotholeComplaints" / "Population" ) * 1000
 #
 # The 2020 NTA scheme includes airports, parks and cemeteries with no
 # residents. QGIS divides by zero there and returns NULL, which renders
 # as unclassified grey rather than failing — so the holes in the QGIS
 # map are these. Dropping them explicitly here keeps them out of the
 # Jenks calculation too.
+#
+# There is no equivalent of the md's "end the editing session by
+# toggling the Edit button": mutate() returns a new object instead of
+# putting a layer into edit mode.
 
 zero_pop <- ntas |> filter(Population == 0) |> pull(NTAName)
 cat("NTAs with no residents, excluded:", length(zero_pop), "\n")
@@ -201,12 +282,13 @@ ntas <- ntas |>
   filter(Population > 0) |>
   mutate(PotholeRate = PotholeComplaints / Population * 1000)
 
-summary(ntas$PotholeRate)
+print(summary(ntas$PotholeRate))
 
 
 # ---- 8. Classify and map --------------------------------------------
-# QGIS: Symbology > Graduated on PotholeRate, pick a ramp and a
-# classification, Classify.
+# md, last step: Layer Properties > Symbology, "Graduated", value
+# PotholeRate, choose a color ramp and a classification scheme, click
+# Classify.
 #
 # classInt's Jenks and QGIS's Natural Breaks are separate
 # implementations and will not always return the same break values.
@@ -217,7 +299,38 @@ summary(ntas$PotholeRate)
 brks <- classIntervals(ntas$PotholeRate, n = 5, style = "jenks")$brks
 print(round(brks, 2))    # compare to what QGIS gave you
 
-ggplot(ntas) +
+# Look hard at the map this produces, in QGIS as much as here. Section 7
+# removed the NTAs with no residents at all, but it did not remove the
+# ones with almost none, and those are the same parks and cemeteries:
+# Highland Park-Cypress Hills Cemeteries (North) has 12 residents and
+# 30 complaints, a "rate" of 2,500 per 1,000. Seven such NTAs take four
+# of the five classes, and the 207 neighborhoods anyone actually lives
+# in are all crushed into the bottom one. The map is technically
+# correct and reads as a map of where the cemeteries are.
+#
+# This is the small-denominator problem, and it is the real lesson of
+# the exercise: a rate is only as stable as the population underneath
+# it. Print the offenders, then decide.
+ntas |>
+  st_drop_geometry() |>
+  slice_max(PotholeRate, n = 8) |>
+  print()
+
+# Three standard fixes, none of them "the" answer:
+#
+#   1. Set a population floor, e.g. filter(Population >= 500). Simple,
+#      defensible, and you must say so in the caption.
+#   2. Classify with quantiles instead of Jenks — style = "quantile"
+#      above — which spreads the 214 NTAs evenly over five classes and
+#      lets the outliers sit alone in the top one.
+#   3. Map the raw PotholeComplaints count instead of the rate, and let
+#      the reader supply the population themselves.
+#
+# Option 1 as a one-liner, to try against the map below:
+#
+#   ntas <- ntas |> filter(Population >= 500)
+
+p <- ggplot(ntas) +
   geom_sf(aes(fill = PotholeRate), colour = "white", linewidth = 0.1) +
   scale_fill_fermenter(
     palette   = "YlOrRd",
@@ -232,15 +345,16 @@ ggplot(ntas) +
   ) +
   theme_void()
 
-dir.create("outputs", showWarnings = FALSE)
-ggsave(out_png, width = 9, height = 9, dpi = 200)
+ggsave(out_png, p, width = 9, height = 9, dpi = 200)
+cat("wrote", out_png, "\n")
 
 
 # ---- 9. Export ------------------------------------------------------
-# Same GeoPackage the QGIS path produces, with the same field names, so
-# the two can be opened side by side and compared.
+# Same GeoPackage the QGIS path produces, with the same layer and field
+# names, so the two can be opened side by side and compared.
 
-st_write(ntas, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
+st_write(ntas, out_gpkg, layer = "NTA_PotholeTotals",
+         delete_dsn = TRUE, quiet = TRUE)
 cat("wrote", out_gpkg, "\n")
 
 
