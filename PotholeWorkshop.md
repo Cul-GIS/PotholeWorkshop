@@ -237,4 +237,4 @@ Click OK and inspect the results:
 
 ## Data and companion files
 
-Pre-packaged data (in case you want to skip the download/cleanup steps above) and companion R scripts are in [data/PotholeWorkshop](data):
+Pre-packaged data (in case you want to skip the download/cleanup steps above) is in the [data folder](data). The same analysis is also available as companion scripts in [R](PotholeWorkshop.R) and [Python](PotholeWorkshop.py).
