@@ -2,7 +2,7 @@
 
 In this exercise you will use QGIS to create a map showing the rate of pothole-related 311 complaints in New York City neighborhoods in 2026.
 
-All of the data you need for this project is available freely online, and this document gives detailed instructions for retrieving it. Pre-packaged versions of the data files are also available in the [data folder for this exercise](data) if you'd rather skip the download/cleanup steps.
+All of the data you need for this project is available freely online, and this document gives detailed instructions for retrieving it. Pre-packaged versions of the data files are also available in the [data folder for this exercise](https://github.com/Cul-GIS/PotholeWorkshop/tree/main/data) if you'd rather skip the download/cleanup steps.
 
 For this exercise we will use a neighborhood definition called "Neighborhood Tabulation Areas" (NTAs). NTAs are created by the NYC Dept. of City Planning and are aggregations of census tracts meant to approximate neighborhoods as they are popularly thought of by city residents. NTAs typically have around 40,000–50,000 residents.
 
@@ -237,4 +237,6 @@ Click OK and inspect the results:
 
 ## Data and companion files
 
-Pre-packaged data (in case you want to skip the download/cleanup steps above) is in the [data folder](data). The same analysis is also available as companion scripts in [R](PotholeWorkshop.R) and [Python](PotholeWorkshop.py).
+Pre-packaged data (in case you want to skip the download/cleanup steps above) is in the [data folder](https://github.com/Cul-GIS/PotholeWorkshop/tree/main/data). The same analysis is also available as companion scripts in [R](https://github.com/Cul-GIS/PotholeWorkshop/blob/main/PotholeWorkshop.R) and [Python](https://github.com/Cul-GIS/PotholeWorkshop/blob/main/PotholeWorkshop.py).
+
+To get the scripts and data together, [download the whole workshop as a zip](https://github.com/Cul-GIS/PotholeWorkshop/archive/refs/heads/main.zip). It unzips to a folder called `PotholeWorkshop-main`; that's the folder to set as the working directory in either script.

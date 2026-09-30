@@ -1,5 +1,7 @@
 # Pothole Workshop
 
+**Workshop page: [cul-gis.github.io/PotholeWorkshop](https://cul-gis.github.io/PotholeWorkshop/)**
+
 Map the rate of pothole-related 311 complaints across New York City neighborhoods (Neighborhood Tabulation Areas) in 2026.
 
 This workshop will be introduced on **September 30, 2026** as part of the **Columbia Libraries Data Club** series. [Join the Data Club WhatsApp group](https://chat.whatsapp.com/IF4CO9oxcFELsUq0N8IX55) for session details and updates.
