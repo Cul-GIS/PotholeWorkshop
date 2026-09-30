@@ -11,5 +11,5 @@ lines below with a plain include_relative of PotholeWorkshop.md.
 
 {% capture walkthrough %}{% include_relative PotholeWorkshop.md %}{% endcapture %}
 {% assign walkthrough = walkthrough | split: "## Data and companion files" | first %}
-{% assign walkthrough = walkthrough | replace: "https://github.com/Cul-GIS/PotholeWorkshop/tree/main/data", "http://www.columbia.edu/acis/eds/gis/images/IntroGIS.zip" %}
+{% assign walkthrough = walkthrough | replace: "https://github.com/Cul-GIS/PotholeWorkshop/tree/main/data", "https://www.columbia.edu/acis/eds/gis/images/IntroGIS.zip" %}
 {{ walkthrough }}
